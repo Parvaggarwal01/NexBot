@@ -1,0 +1,95 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;900&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --leva-sizes-rootWidth: 340px;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+body {
+  margin: 0;
+  background-color: #0f0f23;
+  background-image: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+  font-size: 16px; /* Prevent zoom on iOS */
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Mobile optimization */
+@media (max-width: 768px) {
+  #root {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .chat-interface {
+    padding: 10px;
+    height: 100vh;
+  }
+
+  /* Prevent zoom on input focus */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+body.greenScreen {
+  background-color: #00ff00;
+  background-image: none;
+}
+
+/* Text chat mode styling */
+.prose h1 {
+  @apply text-2xl font-bold mt-4 mb-2 text-gray-800;
+}
+.prose h2 {
+  @apply text-xl font-bold mt-4 mb-2 text-gray-800;
+}
+.prose h3 {
+  @apply text-lg font-bold mt-4 mb-2 text-gray-800;
+}
+.prose strong {
+  @apply font-semibold text-gray-900;
+}
+.prose em {
+  @apply italic text-gray-700;
+}
+.prose code {
+  @apply bg-gray-100 px-2 py-1 rounded text-sm font-mono text-gray-800;
+}
+.prose ul {
+  @apply list-disc pl-6 space-y-1;
+}
+.prose ol {
+  @apply list-decimal pl-6 space-y-1;
+}
+.prose li {
+  @apply text-gray-700;
+}
+
+/* Scrollbar styling for text mode */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

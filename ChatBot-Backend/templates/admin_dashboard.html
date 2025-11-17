@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <div class="admin-container">
+    <h2>Admin Dashboard</h2>
+
+    <a href="/admin/logout" class="logout">Logout</a>
+
+    <h3>📤 Upload New Policy File</h3>
+    <form action="/admin/upload" method="POST" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".pdf,.docx,.xlsx" required />
+      <button type="submit">Upload</button>
+    </form>
+
+    <h3>📁 Uploaded Files</h3>
+    <ul>
+      {% for file in files %}
+        <li>{{ file }}</li>
+      {% endfor %}
+    </ul>
+
+    <form action="/admin/rebuild" method="POST">
+      <button type="submit" class="rebuild-btn">Rebuild Knowledge Base</button>
+    </form>
+  </div>
+</body>
+</html>
