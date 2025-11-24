@@ -12,6 +12,7 @@ warnings.filterwarnings("ignore")
 import time
 from threading import Lock
 from functools import wraps
+from io import BytesIO
 
 # Load environment variables
 load_dotenv()
@@ -53,17 +54,16 @@ def rate_limit_api(func):
 
     return wrapper
 
-@rate_limit_api
-def call_qa_chain_safely(qa_chain, message):
-    """Safely call QA chain with rate limiting"""
+def call_qa_chain_safely(qa_chain, question):
+    """Safely call QA chain without rate limiting"""
     if not qa_chain:
         return "Policy assistant is currently unavailable."
 
     # Check if qa_chain is a function or has an invoke method
     if callable(qa_chain):
-        return qa_chain(message)
+        return qa_chain(question)
     elif hasattr(qa_chain, 'invoke'):
-        return qa_chain.invoke(message)
+        return qa_chain.invoke(question)
     else:
         return "QA chain is not properly configured."
 
@@ -115,56 +115,139 @@ def allowed_file(filename):
 
 # Removed local TTS - using gTTS only for better web compatibility
 
-def text_to_speech_gtts_with_rate_limit(text, filepath, language='en'):
-    """gTTS with rate limiting to avoid 429 errors"""
-    global last_request_time
-
+def text_to_speech_gtts_with_rate_limit(text, filepath=None, voice_type='female'):
+    """gTTS without rate limiting and with voice variants"""
     if not TTS_AVAILABLE:
         print("❌ gTTS not available")
-        return False
+        return None
 
-    with request_lock:
-        # Ensure minimum interval between requests
-        current_time = time.time()
-        time_since_last = current_time - last_request_time
+    # Voice configurations for different avatar types
+    # Single British female voice for all avatars
+    voice_config = {
+        'lang': 'en',
+        'tld': 'co.uk',  # British English - nice female voice
+        'slow': False
+    }
 
-        if time_since_last < MIN_REQUEST_INTERVAL:
-            wait_time = MIN_REQUEST_INTERVAL - time_since_last
-            print(f"⏳ TTS Rate limiting: waiting {wait_time:.1f} seconds...")
-            time.sleep(wait_time)
+    config = voice_configs.get(voice_type, voice_configs['female'])
 
-        try:
-            print(f"🎤 Generating TTS for: '{text[:50]}...'")
-            print(f"📁 Saving to: {filepath}")
+    try:
+        print(f"🎤 Generating {voice_type} voice TTS for: '{text[:50]}...'")
+        print(f"📁 Using config: {voice_type} ({config['tld']} variant)")
 
-            tts = gTTS(text=text, lang=language, slow=False)
+        tts = gTTS(
+            text=text,
+            lang=config['lang'],
+            tld=config['tld'],
+            slow=config['slow']
+        )
+
+        if filepath:
+            # Save to file
             tts.save(filepath)
-            last_request_time = time.time()
-
-            # Verify file was created
             if os.path.exists(filepath):
                 file_size = os.path.getsize(filepath)
-                print(f"✅ Audio file created: {file_size} bytes")
+                print(f"✅ {voice_type} voice audio file created: {file_size} bytes")
                 return True
             else:
                 print("❌ Audio file not created")
                 return False
+        else:
+            # Return bytes for direct use
+            audio_buffer = BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_buffer.seek(0)
+            audio_bytes = audio_buffer.getvalue()
+            print(f"✅ {voice_type} voice audio generated: {len(audio_bytes)} bytes")
+            return audio_bytes
 
-        except Exception as e:
-            print(f"❌ gTTS Error: {e}")
-            return False
+    except Exception as e:
+        print(f"❌ gTTS Error: {e}")
+        return None
 
-def text_to_speech_gtts(text, filename, language='en'):
-    """Convert text to speech using gTTS with rate limiting"""
+def text_to_speech_gtts(text, filename, voice_type='female'):
+    """Convert text to speech using gTTS with voice variants"""
     filepath = os.path.join(AUDIO_FOLDER, filename)
 
-    print("🌐 Generating audio with gTTS...")
-    if text_to_speech_gtts_with_rate_limit(text, filepath, language):
-        print("✅ gTTS audio generation successful")
+    print(f"🌐 Generating {voice_type} voice audio with gTTS...")
+    if text_to_speech_gtts_with_rate_limit(text, filepath, voice_type):
+        print(f"✅ gTTS {voice_type} voice generation successful")
         return filepath
 
-    print("❌ gTTS audio generation failed")
+    print(f"❌ gTTS {voice_type} voice generation failed")
     return None
+
+def generate_audio_with_voice_variants(text, voice_type):
+    """Generate audio with different voice variants using gTTS"""
+    try:
+        print(f"🎤 Generating {voice_type} voice TTS for: '{text[:50]}...'")
+
+        # Single British female voice for all avatars
+        voice_config = {
+            'lang': 'en',
+            'tld': 'co.uk',  # British English - nice female voice
+            'slow': False
+        }
+
+        config = voice_config
+        print(f"📁 Using British female voice ({config['tld']} variant)")        # Create gTTS object
+        tts = gTTS(text=text, lang=config['lang'], tld=config['tld'], slow=config['slow'])
+
+        # Save to BytesIO buffer
+        audio_buffer = BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        audio_bytes = audio_buffer.read()
+
+        print(f"✅ {voice_type} voice audio generated: {len(audio_bytes)} bytes")
+        return base64.b64encode(audio_bytes).decode('utf-8')
+
+    except Exception as e:
+        print(f"❌ Audio generation error: {e}")
+        return None
+
+def generate_simple_lipsync(text):
+    """Generate simple lipsync data for text"""
+    # Estimate duration based on text length (roughly 150 words per minute)
+    word_list = text.split()
+    word_count = len(word_list)
+    duration = max(1.0, word_count / 2.5)  # Minimum 1 second, roughly 150 WPM
+
+    # Generate basic mouth cues based on text content
+    mouth_cues = []
+    current_time = 0.0
+    time_per_word = duration / max(1, word_count)
+
+    # Simple vowel/consonant mapping for basic lipsync
+    vowel_visemes = ['A', 'E', 'I', 'O', 'U']  # Open mouth shapes
+    consonant_visemes = ['B', 'F', 'G', 'H', 'X']  # Various consonant shapes
+
+    for i, word in enumerate(word_list):
+        word_duration = time_per_word * 0.8  # Leave some gap between words
+        cue_duration = word_duration / max(1, len(word))
+
+        for j, char in enumerate(word.lower()):
+            if char.isalpha():
+                # Choose viseme based on character
+                if char in 'aeiou':
+                    viseme = vowel_visemes[ord(char) % len(vowel_visemes)]
+                else:
+                    viseme = consonant_visemes[ord(char) % len(consonant_visemes)]
+
+                mouth_cues.append({
+                    "start": current_time,
+                    "end": current_time + cue_duration,
+                    "value": viseme
+                })
+                current_time += cue_duration
+
+        # Add a small pause between words
+        current_time += time_per_word * 0.2
+
+    return {
+        "metadata": {"duration": duration},
+        "mouthCues": mouth_cues
+    }
 
 def get_audio_duration(audio_file):
     """Get actual duration of audio file using ffprobe"""
@@ -281,11 +364,21 @@ def chat_text():
     try:
         data = request.get_json()
         message = data.get('message', '')
+        voice_type = data.get('voice_type', 'female')  # New parameter for voice type
 
         if not message.strip():
             return jsonify({'error': 'Please enter a question.'}), 400
 
-        print(f"📝 Text chat request: {message[:50]}...")
+        print(f"📝 Text chat request ({voice_type} voice): {message[:50]}...")
+
+        # Quick test responses for hello/test
+        if message.lower().strip() in ['test', 'hello', 'hi']:
+            return jsonify({
+                'response': "Hello! I'm your Educational Policy Assistant. I'm working properly. How can I help you with policy questions?",
+                'message': "Hello! I'm your Educational Policy Assistant. I'm working properly. How can I help you with policy questions?",
+                'mode': 'text-only',
+                'voice_type': voice_type
+            })
 
         # Use the rate-limited wrapper
         response = call_qa_chain_safely(qa_chain, message)
@@ -295,7 +388,8 @@ def chat_text():
         return jsonify({
             'response': response,
             'message': response,
-            'mode': 'text-only'
+            'mode': 'text-only',
+            'voice_type': voice_type
         })
 
     except Exception as e:
@@ -303,7 +397,8 @@ def chat_text():
         return jsonify({
             'response': "I'm experiencing technical difficulties. Please try again in a moment.",
             'message': "I'm experiencing technical difficulties. Please try again in a moment.",
-            'mode': 'text-only'
+            'mode': 'text-only',
+            'voice_type': voice_type
         }), 500
 
 # ------------------ ADMIN ROUTES ------------------
@@ -355,120 +450,76 @@ def rebuild_index():
 # ------------------ 3D AVATAR API ROUTES ------------------
 @app.route("/chat", methods=["POST"])
 def chat_3d():
-    """3D Avatar chat endpoint - integrates with policy QA system"""
-    user_message = request.json.get("message", "")
-
-    # Default welcome message if no message provided
-    if not user_message:
-        return jsonify({
-            "messages": [
-                {
-                    "text": "Hello! I'm your Educational Policy Assistant. How can I help you today?",
-                    "audio": audio_file_to_base64(os.path.join(AUDIO_FOLDER, "intro_0.wav")) if os.path.exists(os.path.join(AUDIO_FOLDER, "intro_0.wav")) else "",
-                    "lipsync": read_json_transcript(os.path.join(AUDIO_FOLDER, "intro_0.json")),
-                    "facialExpression": "smile",
-                    "animation": "Talking_1"
-                },
-                {
-                    "text": "I can help you understand attendance policies, CARE guidelines, and certification requirements.",
-                    "audio": audio_file_to_base64(os.path.join(AUDIO_FOLDER, "intro_1.wav")) if os.path.exists(os.path.join(AUDIO_FOLDER, "intro_1.wav")) else "",
-                    "lipsync": read_json_transcript(os.path.join(AUDIO_FOLDER, "intro_1.json")),
-                    "facialExpression": "default",
-                    "animation": "Talking_0"
-                }
-            ]
-        })
-
-    # Check if QA system is available
-    if not qa_chain:
-        return jsonify({
-            "messages": [
-                {
-                    "text": "I apologize, but the policy system is currently unavailable. Please try again later.",
-                    "audio": "",
-                    "lipsync": {"metadata": {"duration": 2.0}, "mouthCues": []},
-                    "facialExpression": "sad",
-                    "animation": "Talking_0"
-                }
-            ]
-        })
-
+    """3D Avatar chat endpoint with voice variants"""
     try:
-        # Get answer from your policy QA system (rate-limited)
-        print(f"🎭 3D chat request: {user_message[:50]}...")
+        data = request.get_json()
+        user_message = data.get("message", "")
+        voice_type = data.get("voice_type", "female")  # New parameter for voice type
+
+        print(f"🎭 3D chat request ({voice_type} voice): {user_message[:50]}...")
+
+        # Default welcome message if no message provided
+        if not user_message:
+            welcome_text = "Hello! I'm your Educational Policy Assistant. How can I help you today?"
+            welcome_audio = generate_audio_with_voice_variants(welcome_text, voice_type)
+
+            return jsonify({
+                "message": welcome_text,
+                "audio": welcome_audio or "",
+                "animation": "Talking_1",
+                "lipsync": generate_simple_lipsync(welcome_text),
+                "voice_type": voice_type
+            })
+
+        # Check if QA system is available
+        if not qa_chain:
+            error_text = "I apologize, but the policy system is currently unavailable. Please try again later."
+            error_audio = generate_audio_with_voice_variants(error_text, voice_type)
+
+            return jsonify({
+                "message": error_text,
+                "audio": error_audio or "",
+                "animation": "Talking_0",
+                "lipsync": generate_simple_lipsync(error_text),
+                "voice_type": voice_type
+            })
+
+        # Get answer from policy QA system
         policy_answer = call_qa_chain_safely(qa_chain, user_message)
         print(f"✅ 3D response generated successfully")
 
-        # Determine appropriate facial expression and animation based on content
-        facial_expression = "default"
-        animation = "Talking_0"
+        # Generate audio with specified voice type
+        response_audio = generate_audio_with_voice_variants(policy_answer, voice_type)
 
-        # Simple sentiment analysis for expressions
+        # Determine appropriate animation based on content
+        animation = "Talking_0"
         if any(word in policy_answer.lower() for word in ["sorry", "apologize", "error", "problem"]):
-            facial_expression = "sad"
             animation = "Talking_1"
         elif any(word in policy_answer.lower() for word in ["great", "excellent", "perfect", "congratulations"]):
-            facial_expression = "smile"
             animation = "Talking_2"
         elif "not found" in policy_answer.lower() or "couldn't find" in policy_answer.lower():
-            facial_expression = "surprised"
             animation = "Talking_1"
 
-        # Split long responses into shorter messages (for better 3D presentation)
-        messages = []
-        sentences = policy_answer.split('. ')
-
-        # Group sentences into messages (max 2 sentences per message)
-        for i in range(0, len(sentences), 2):
-            message_text = '. '.join(sentences[i:i+2])
-            if message_text and not message_text.endswith('.'):
-                message_text += '.'
-
-            # Generate audio for this message part
-            audio_filename = f"message_{i//2}.mp3"
-            audio_filepath = text_to_speech_gtts(message_text, audio_filename)
-
-            # Generate lipsync data
-            lipsync_file = os.path.join(AUDIO_FOLDER, f"message_{i//2}.json")
-            if audio_filepath:
-                create_lipsync_data(audio_filepath, lipsync_file)
-
-            messages.append({
-                "text": message_text,
-                "audio": audio_file_to_base64(audio_filepath) if audio_filepath else "",
-                "lipsync": read_json_transcript(lipsync_file),
-                "facialExpression": facial_expression,
-                "animation": animation
-            })
-
-            # Limit to 3 messages maximum
-            if len(messages) >= 3:
-                break
-
-        # If no messages created, create a default one
-        if not messages:
-            messages = [{
-                "text": policy_answer,
-                "audio": "",
-                "lipsync": {"metadata": {"duration": 2.0}, "mouthCues": []},
-                "facialExpression": facial_expression,
-                "animation": animation
-            }]
-
-        return jsonify({"messages": messages})
+        return jsonify({
+            "message": policy_answer,
+            "audio": response_audio or "",
+            "animation": animation,
+            "lipsync": generate_simple_lipsync(policy_answer),
+            "voice_type": voice_type
+        })
 
     except Exception as e:
-        print(f"Chat error: {e}")
+        print(f"❌ 3D Chat error: {e}")
+        error_text = "I encountered an error processing your question. Please try again."
+        voice_type = request.json.get("voice_type", "female") if request.json else "female"
+        error_audio = generate_audio_with_voice_variants(error_text, voice_type)
+
         return jsonify({
-            "messages": [
-                {
-                    "text": "I encountered an error processing your question. Please try again.",
-                    "audio": "",
-                    "lipsync": {"metadata": {"duration": 2.0}, "mouthCues": []},
-                    "facialExpression": "sad",
-                    "animation": "Talking_0"
-                }
-            ]
+            "message": error_text,
+            "audio": error_audio or "",
+            "animation": "Talking_0",
+            "lipsync": generate_simple_lipsync(error_text),
+            "voice_type": voice_type
         })
 
 # ------------------ UTILITY ROUTES ------------------

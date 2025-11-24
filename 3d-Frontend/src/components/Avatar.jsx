@@ -106,12 +106,23 @@ const corresponding = {
 
 let setupMode = false;
 
-export function Avatar(props) {
+export function Avatar({ isActive = true, audio: externalAudio, ...props }) {
   const { nodes, materials, scene } = useGLTF(
     "/models/64f1a714fe61576b46f27ca2.glb"
   );
 
   const { message, onMessagePlayed, chat } = useChat();
+
+  // Debug audio prop
+  useEffect(() => {
+    if (externalAudio) {
+      console.log(
+        `🎭 Avatar: Received audio prop, readyState=${externalAudio.readyState}, currentTime=${externalAudio.currentTime}, paused=${externalAudio.paused}`
+      );
+    } else {
+      console.log("🎭 Avatar: No audio prop received");
+    }
+  }, [externalAudio]);
 
   const [lipsync, setLipsync] = useState();
 
@@ -124,11 +135,31 @@ export function Avatar(props) {
     setAnimation(message.animation);
     setFacialExpression(message.facialExpression);
     setLipsync(message.lipsync);
-    const audio = new Audio("data:audio/mp3;base64," + message.audio);
-    audio.play();
-    setAudio(audio);
-    audio.onended = onMessagePlayed;
-  }, [message]);
+
+    // Debug lipsync data
+    if (message.lipsync) {
+      console.log("🎤 Lipsync data received:", message.lipsync);
+      console.log(
+        "🎤 Mouth cues count:",
+        message.lipsync.mouthCues ? message.lipsync.mouthCues.length : 0
+      );
+      if (message.lipsync.mouthCues && message.lipsync.mouthCues.length > 0) {
+        console.log(
+          "🎤 First few mouth cues:",
+          message.lipsync.mouthCues.slice(0, 5)
+        );
+      }
+    } else {
+      console.log("❌ No lipsync data in message");
+    }
+
+    // Avatar component no longer handles audio - audio is handled by individual avatar components
+    if (message.audio) {
+      console.log(
+        "🎭 Avatar: Message received but skipping audio (audio handled elsewhere)"
+      );
+    }
+  }, [message, isActive, onMessagePlayed]);
 
   const { animations } = useGLTF("/models/animations.glb");
 
@@ -176,7 +207,8 @@ export function Avatar(props) {
   const [winkLeft, setWinkLeft] = useState(false);
   const [winkRight, setWinkRight] = useState(false);
   const [facialExpression, setFacialExpression] = useState("");
-  const [audio, setAudio] = useState();
+  // Use external audio passed from Experience component
+  const audio = externalAudio;
 
   useFrame(() => {
     !setupMode &&
@@ -201,14 +233,57 @@ export function Avatar(props) {
     }
 
     const appliedMorphTargets = [];
+
+    // Debug audio state
     if (message && lipsync) {
+      if (!audio) {
+        console.log("❌ Lipsync: No audio element available");
+      } else if (typeof audio.currentTime === "undefined") {
+        console.log("❌ Lipsync: Audio currentTime is undefined");
+      } else if (audio.paused) {
+        console.log("⏸️ Lipsync: Audio is paused");
+      } else if (!lipsync.mouthCues || lipsync.mouthCues.length === 0) {
+        console.log("❌ Lipsync: No mouth cues available");
+      }
+    }
+
+    if (
+      message &&
+      lipsync &&
+      audio &&
+      typeof audio.currentTime !== "undefined" &&
+      !audio.paused
+    ) {
       const currentAudioTime = audio.currentTime;
+
+      // Debug lipsync (only log every 10 frames to avoid spam)
+      if (
+        lipsync.mouthCues &&
+        lipsync.mouthCues.length > 0 &&
+        Math.floor(currentAudioTime * 10) % 10 === 0
+      ) {
+        console.log(
+          `🎤 Lipsync Debug: audio.currentTime=${currentAudioTime.toFixed(
+            2
+          )}s, mouthCues count=${lipsync.mouthCues.length}, audio.duration=${
+            audio.duration ? audio.duration.toFixed(2) : "unknown"
+          }s, audio.paused=${audio.paused}`
+        );
+      }
+
       for (let i = 0; i < lipsync.mouthCues.length; i++) {
         const mouthCue = lipsync.mouthCues[i];
         if (
           currentAudioTime >= mouthCue.start &&
           currentAudioTime <= mouthCue.end
         ) {
+          console.log(
+            `🗣️ Applying viseme: ${
+              mouthCue.value
+            } at time ${currentAudioTime.toFixed(2)}s (${mouthCue.start}-${
+              mouthCue.end
+            })`
+          );
           appliedMorphTargets.push(corresponding[mouthCue.value]);
           lerpMorphTarget(corresponding[mouthCue.value], 1, 0.2);
           break;

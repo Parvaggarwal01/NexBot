@@ -5,6 +5,8 @@ const backendUrl = import.meta.env.VITE_API_URL || "http://localhost:5001";
 const ChatContext = createContext();
 
 export const ChatProvider = ({ children }) => {
+  // Voice type removed - using single British female voice for all avatars
+
   const chat = async (message) => {
     setLoading(true);
     try {
@@ -13,7 +15,10 @@ export const ChatProvider = ({ children }) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+          message,
+          voice_type: "female", // Always use British female voice
+        }),
       });
 
       if (!response.ok) {
@@ -31,18 +36,26 @@ export const ChatProvider = ({ children }) => {
         // New backend format
         const messageData = {
           text: data.message,
-          audio: data.audio ? `${backendUrl}${data.audio}` : null,
+          audio: data.audio
+            ? data.audio.startsWith("data:")
+              ? data.audio
+              : `data:audio/mp3;base64,${data.audio}`
+            : null,
           lipsync: data.lipsync || null,
           facialExpression: "default",
-          animation: "Talking",
+          animation: data.animation || "Talking",
         };
 
-        // Validate audio file if provided
-        if (messageData.audio) {
+        // Only validate file paths, not base64 data
+        if (messageData.audio && messageData.audio.startsWith("/")) {
+          // Only validate if it's a file path, not base64
           try {
-            const audioResponse = await fetch(messageData.audio, {
-              method: "HEAD",
-            });
+            const audioResponse = await fetch(
+              `${backendUrl}${messageData.audio}`,
+              {
+                method: "HEAD",
+              }
+            );
             if (!audioResponse.ok) {
               console.warn(
                 "Audio file not accessible, proceeding without audio"
@@ -93,6 +106,7 @@ export const ChatProvider = ({ children }) => {
   const [message, setMessage] = useState();
   const [loading, setLoading] = useState(false);
   const [cameraZoomed, setCameraZoomed] = useState(true);
+  const [isTyping, setIsTyping] = useState(false);
   const onMessagePlayed = () => {
     setMessages((messages) => messages.slice(1));
   };
@@ -114,6 +128,8 @@ export const ChatProvider = ({ children }) => {
         loading,
         cameraZoomed,
         setCameraZoomed,
+        isTyping,
+        setIsTyping,
       }}
     >
       {children}
