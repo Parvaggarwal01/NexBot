@@ -186,7 +186,7 @@ def get_qa_chain():
     retriever = build_retriever()
 
     llm = ChatGoogleGenerativeAI(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=0.3,
         max_tokens=500,      # Limit response length
@@ -216,7 +216,14 @@ def get_qa_chain():
             context = "\n\n".join([doc.page_content for doc in docs])
 
             # Create prompt with context
-            prompt = f"""You are an educational assistant. Use the following context to answer the question clearly and accurately. Base your answer strictly on the provided context.
+            prompt = f"""You are a professional Educational Policy Assistant. Your role is to answer questions based strictly on the provided context.
+
+Instructions:
+1. **Tone**: Maintain a professional, helpful, and polite tone at all times.
+2. **Greetings**: If the user's input is a greeting (e.g., "Hello", "Hi", "Good morning"), respond politely and ask how you can assist with policy-related questions. Do NOT mention the context or say "Based on the provided context".
+3. **Context Usage**: Use the provided context to answer the question. Do NOT start your answer with phrases like "Based on the provided context" or "According to the documents". Just state the answer directly.
+4. **Out of Context**: If the answer cannot be found in the provided context, standardly reply: "I am not allowed to discuss topics outside the provided educational policy context." Do not attempt to answer from general knowledge.
+5. **Formatting**: Use Markdown for clear formatting (bolding key terms, lists, etc.) where appropriate.
 
 Context:
 {context}

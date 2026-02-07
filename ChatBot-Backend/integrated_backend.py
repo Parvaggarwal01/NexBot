@@ -115,6 +115,17 @@ def allowed_file(filename):
 
 # Removed local TTS - using gTTS only for better web compatibility
 
+def clean_text_for_tts(text):
+    """Clean text for better TTS by removing asterisks and markdown"""
+    import re
+    # Remove asterisks (both single and double)
+    text = re.sub(r'\*+', '', text)
+    # Remove other markdown formatting
+    text = re.sub(r'[_#`~]', '', text)
+    # Clean up extra spaces
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
 def text_to_speech_gtts_with_rate_limit(text, filepath=None, voice_type='female'):
     """gTTS without rate limiting and with voice variants"""
     if not TTS_AVAILABLE:
@@ -122,24 +133,26 @@ def text_to_speech_gtts_with_rate_limit(text, filepath=None, voice_type='female'
         return None
 
     # Voice configurations for different avatar types
-    # Single British female voice for all avatars
+    # Single US female voice for all avatars (faster, no delay)
     voice_config = {
         'lang': 'en',
-        'tld': 'co.uk',  # British English - nice female voice
+        'tld': 'com',  # US English - simple, clear voice
         'slow': False
     }
 
-    config = voice_configs.get(voice_type, voice_configs['female'])
+    # Use the single US voice configuration
 
     try:
-        print(f"🎤 Generating {voice_type} voice TTS for: '{text[:50]}...'")
-        print(f"📁 Using config: {voice_type} ({config['tld']} variant)")
+        # Clean text to remove asterisks and markdown
+        cleaned_text = clean_text_for_tts(text)
+        print(f"🎤 Generating {voice_type} voice TTS for: '{cleaned_text[:50]}...'")
+        print(f"📁 Using config: {voice_type} ({voice_config['tld']} variant)")
 
         tts = gTTS(
-            text=text,
-            lang=config['lang'],
-            tld=config['tld'],
-            slow=config['slow']
+            text=cleaned_text,
+            lang=voice_config['lang'],
+            tld=voice_config['tld'],
+            slow=voice_config['slow']
         )
 
         if filepath:
@@ -182,16 +195,18 @@ def generate_audio_with_voice_variants(text, voice_type):
     try:
         print(f"🎤 Generating {voice_type} voice TTS for: '{text[:50]}...'")
 
-        # Single British female voice for all avatars
+        # Single US female voice for all avatars (faster, no delay)
         voice_config = {
             'lang': 'en',
-            'tld': 'co.uk',  # British English - nice female voice
+            'tld': 'com',  # US English - simple, clear voice
             'slow': False
         }
 
         config = voice_config
-        print(f"📁 Using British female voice ({config['tld']} variant)")        # Create gTTS object
-        tts = gTTS(text=text, lang=config['lang'], tld=config['tld'], slow=config['slow'])
+        print(f"📁 Using US female voice ({config['tld']} variant)")        # Create gTTS object
+        # Clean text to remove asterisks and markdown
+        cleaned_text = clean_text_for_tts(text)
+        tts = gTTS(text=cleaned_text, lang=config['lang'], tld=config['tld'], slow=config['slow'])
 
         # Save to BytesIO buffer
         audio_buffer = BytesIO()
@@ -563,7 +578,7 @@ def debug_api():
 
         # Test a very simple API call
         genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
         # Simple test
         response = model.generate_content("Hello")
@@ -572,7 +587,7 @@ def debug_api():
             'status': 'success',
             'api_working': True,
             'test_response': response.text[:100],
-            'current_model': 'gemini-2.0-flash',
+            'current_model': 'gemini-2.5-flash',
             'rate_limit_interval': MIN_API_INTERVAL
         })
     except Exception as e:
